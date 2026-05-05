@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>統合戦略 ランダマイザー</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --bg: #0d0e12;
+    --surface: #13151c;
+    --border: #2a2d3a;
+    --accent: #e8c56a;
+    --accent2: #c47a3a;
+    --text: #d4cfc4;
+    --text-dim: #6b6860;
+    --red: #c44a4a;
+    --teal: #4a9ea0;
+    --purple: #7a5abf;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Serif JP', serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 60px;
+    background-image:
+      radial-gradient(ellipse at 20% 10%, rgba(100,70,30,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 90%, rgba(40,80,100,0.08) 0%, transparent 60%);
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .title-en {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    text-transform: uppercase;
+    opacity: 1;
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-size: clamp(20px, 5vw, 28px);
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    color: #ffffff;
+    text-shadow: 0 0 24px rgba(232,197,106,0.5), 0 2px 4px rgba(0,0,0,0.8);
+  }
+
+  h1 span {
+    color: #f0d080;
+    text-shadow: 0 0 20px rgba(240,208,128,0.6), 0 2px 4px rgba(0,0,0,0.8);
+  }
+
+  /* シナリオ選択 */
+  .scenario-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 28px;
+    max-width: 600px;
+    width: 100%;
+  }
+
+  .tab {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    font-family: 'Noto Serif JP', serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 2px;
+    letter-spacing: 0.05em;
+  }
+
+  .tab:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+
+  .tab.active {
+    background: linear-gradient(135deg, rgba(232,197,106,0.15), rgba(196,122,58,0.1));
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 12px rgba(232,197,106,0.15);
+  }
+
+  /* メインボタン */
+  .roll-btn {
+    width: 100%;
+    max-width: 380px;
+    padding: 18px 32px;
+    background: linear-gradient(135deg, rgba(232,197,106,0.2), rgba(196,122,58,0.15));
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Noto Serif JP', serif;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    transition: all 0.25s;
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .roll-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(232,197,106,0.3), rgba(196,122,58,0.2));
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .roll-btn:hover::before { opacity: 1; }
+  .roll-btn:hover { box-shadow: 0 0 24px rgba(232,197,106,0.25); transform: translateY(-1px); }
+  .roll-btn:active { transform: translateY(0); }
+
+  .roll-btn.rolling {
+    animation: pulse 0.5s ease infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* 結果カード */
+  .results {
+    width: 100%;
+    max-width: 480px;
+    display: grid;
+    gap: 12px;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: all 0.4s ease;
+  }
+
+  .results.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .result-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+  }
+
+  .result-card.ending::before { background: var(--red); }
+  .result-card.squad::before { background: var(--teal); }
+  .result-card.job::before { background: var(--accent); }
+  .result-card.subjob::before { background: var(--purple); }
+
+  .card-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .result-card.ending .card-label { color: var(--red); opacity: 0.8; }
+  .result-card.squad .card-label { color: var(--teal); opacity: 0.8; }
+  .result-card.job .card-label { color: var(--accent); opacity: 0.8; }
+  .result-card.subjob .card-label { color: var(--purple); opacity: 0.8; }
+
+  .card-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.05em;
+  }
+
+  .card-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 0.05em;
+  }
+
+  /* シナリオ情報表示 */
+  .scenario-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    margin-bottom: 24px;
+  }
+
+  /* shake animation */
+  @keyframes cardIn {
+    0% { opacity: 0; transform: translateX(-8px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+
+  .result-card {
+    animation: cardIn 0.3s ease forwards;
+    opacity: 0;
+  }
+
+  .result-card:nth-child(1) { animation-delay: 0.05s; }
+  .result-card:nth-child(2) { animation-delay: 0.12s; }
+  .result-card:nth-child(3) { animation-delay: 0.19s; }
+  .result-card:nth-child(4) { animation-delay: 0.26s; }
+
+  .divider {
+    width: 100%;
+    max-width: 480px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 4px 0 16px;
+  }
+
+  .job-toggle {
+    display: flex;
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    border-radius: 2px;
+  }
+
+  .job-toggle button {
+    padding: 8px 28px;
+    background: var(--surface);
+    color: var(--text-dim);
+    font-family: 'Noto Serif JP', serif;
+    font-size: 13px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .job-toggle button:first-child {
+    border-right: 1px solid var(--border);
+  }
+
+  .job-toggle button.active {
+    background: linear-gradient(135deg, rgba(232,197,106,0.15), rgba(196,122,58,0.1));
+    color: var(--accent);
+  }
+
+  .section-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  /* 条件セクション */
+  .condition-section {
+    width: 100%;
+    max-width: 480px;
+    margin-bottom: 24px;
+  }
+  .condition-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .condition-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .cond-toggle {
+    display: flex;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    border-radius: 2px;
+  }
+  .cond-toggle button {
+    padding: 5px 16px;
+    background: var(--surface);
+    color: var(--text-dim);
+    font-family: 'Noto Serif JP', serif;
+    font-size: 12px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .cond-toggle button:first-child { border-right: 1px solid var(--border); }
+  .cond-toggle button.active {
+    background: linear-gradient(135deg, rgba(232,197,106,0.15), rgba(196,122,58,0.1));
+    color: var(--accent);
+  }
+  .cond-count {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .cond-count-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+  .cond-count button {
+    width: 32px;
+    height: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 2px;
+  }
+  .cond-count button.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: linear-gradient(135deg, rgba(232,197,106,0.15), rgba(196,122,58,0.1));
+  }
+  .result-card.condition::before { background: #a06030; }
+  .result-card.condition .card-label { color: #c8884a; opacity: 0.8; }
+
+  footer {
+    margin-top: 48px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+    opacity: 0.4;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-en">ARKNIGHTS / INTEGRATED STRATEGIES</div>
+  <h1>統合戦略<span>縛りプレイ</span>ランダマイザー</h1>
+</header>
+
+<div class="section-label">シナリオ / Scenario</div>
+<div class="scenario-tabs" id="tabs"></div>
+
+<div class="section-label">Class / 縛る職業 / Class Restriction</div>
+<div class="job-toggle">
+  <button id="job1btn" class="active" onclick="setJobCount(1)">職業&nbsp;&nbsp;1つ</button>
+  <button id="job2btn" onclick="setJobCount(2)">職業&nbsp;&nbsp;2つ</button>
+</div>
+
+<div class="section-label">縛り条件 / Conditions</div>
+<div class="condition-section">
+  <div class="condition-header">
+    <div class="cond-toggle">
+      <button id="condOffBtn" class="active" onclick="setCondition(false)">なし</button>
+      <button id="condOnBtn" onclick="setCondition(true)">あり</button>
+    </div>
+    <div class="cond-count" id="condCountWrap" style="display:none">
+      <span class="cond-count-label">枚数</span>
+      <button id="cond1btn" class="active" onclick="setCondCount(1)">1</button>
+      <button id="cond2btn" onclick="setCondCount(2)">2</button>
+    </div>
+  </div>
+</div>
+
+<button class="roll-btn" id="rollBtn" onclick="roll()">
+  ▶　決定
+</button>
+
+<div class="results" id="results"></div>
+
+<footer>DOCTOR'S RANDOMIZER — FOR ARKNIGHTS ROGUELIKE</footer>
+
+<script>
+const DATA = {
+  phantom: {
+    name: "ファントムと緋き貴石",
+    tag: "#2 PHANTOM",
+    endings: [
+      { name: "舞曲の終わり", note: "5層表 / ルシアン" },
+      { name: "奇妙な滑稽劇", note: "5層裏 / ギガモルテ" },
+      { name: "盛大なる開幕", note: "6層表 / 司会者" },
+      { name: "声なき楽章", note: "6層裏 / 劇作家" },
+    ],
+    squads: [
+      "指揮分隊",
+      "集団分隊",
+      "支援分隊",
+      "先鋒分隊",
+      "突撃戦術分隊",
+      "要塞戦術分隊",
+      "援護戦術分隊",
+      "破壊戦術分隊",
+      "研究分隊",
+      "高規格分隊",
+    ],
+  },
+  mizuki: {
+    name: "ミヅキと紺碧の樹",
+    tag: "#3 MIZUKI",
+    endings: [
+      { name: "平凡こそ幸せ", note: "5層表" },
+      { name: "静謐なる時代", note: "5層裏" },
+      { name: "凪の代償", note: "6層表" },
+      { name: "星空を湛えた群青", note: "6層裏" },
+    ],
+    squads: [
+      "精神論分隊",
+      "最大活用分隊",
+      "人文主義分隊",
+      "指揮分隊",
+      "集団分隊",
+      "支援分隊",
+      "先鋒分隊",
+      "突撃戦術分隊",
+      "要塞戦術分隊",
+      "援護戦術分隊",
+      "破壊戦術分隊",
+      "研究分隊",
+      "高規格分隊",
+    ],
+  },
+  sami: {
+    name: "探索者と銀氷の果て",
+    tag: "#4 SAMI",
+    endings: [
+      { name: "山々を越えて", note: "5層表 / サーミの意志" },
+      { name: "冬夜来たる", note: "5層裏 / エイクティルニル" },
+      { name: "深淵からの一瞥", note: "6層表 / クレイズセオン" },
+      { name: "終始", note: "6層裏 / ハランドゥハン・ルガサルグス" },
+    ],
+    squads: [
+      "永久狩猟分隊",
+      "生活重視分隊",
+      "科学主義分隊",
+      "特訓分隊",
+      "指揮分隊",
+      "集団分隊",
+      "支援分隊",
+      "先鋒分隊",
+      "突撃戦術分隊",
+      "要塞戦術分隊",
+      "援護戦術分隊",
+      "破壊戦術分隊",
+      "高規格分隊",
+    ],
+  },
+  sarkaz: {
+    name: "サルカズの炉辺奇談",
+    tag: "#5 SARKAZ",
+    endings: [
+      { name: "未来への憧憬", note: "5層表" },
+      { name: "二人の魔王", note: "5層裏" },
+      { name: "天使の都", note: "6層表" },
+      { name: "完全なる叡智", note: "6層裏" },
+      { name: "素晴らしき日", note: "END5" },
+    ],
+    squads: [
+      "霊魂護送分隊",
+      "博学多識分隊",
+      "位置測定分隊",
+      "指揮分隊",
+      "集団分隊",
+      "支援分隊",
+      "先鋒分隊",
+      "突撃戦術分隊",
+      "要塞戦術分隊",
+      "援護戦術分隊",
+      "破壊戦術分隊",
+      "高規格分隊",
+      "臨機応変分隊",
+      "破棘成金分隊",
+      "擬態学者分隊",
+      "奇想天外分隊",
+      "専門家分隊",
+    ],
+  },
+  tou: {
+    name: "歳の界園志異",
+    tag: "#6 TOU",
+    endings: [
+      { name: "鎮撫之儀", note: "5層表" },
+      { name: "長篇残痕", note: "5層裏" },
+      { name: "黒白入玄", note: "6層表" },
+      { name: "無中生有", note: "6層裏" },
+    ],
+    squads: [
+      "指揮分隊",
+      "特別行動分隊",
+      "支援分隊",
+      "突撃戦術分隊",
+      "要塞戦術分隊",
+      "援護戦術分隊",
+      "破壊戦術分隊",
+      "高台突破分隊",
+      "地面突破分隊",
+      "高規格分隊",
+      "観光客分隊",
+      "司歳台分隊",
+      "天師府分隊",
+      "百花繚乱分隊",
+      "起死回生分隊",
+      "歳影反響分隊",
+    ],
+  },
+};
+
+// 職業・職分（全シナリオ共通）
+const JOBS = [
+  { name: "先鋒", subs: ["先駆兵", "旗手", "突撃兵", "戦術家", "偵察兵", "策士"] },
+  { name: "前衛", subs: ["勇士", "闘士", "術戦士", "剣豪", "武者", "領主", "強襲者", "教官", "解放者", "鎌撃士", "重剣士", "槌撃士", "本源戦士", "傭兵"] },
+  { name: "重装", subs: ["重盾衛士", "庇護衛士", "術技衛士", "破壊者", "決闘者", "堅城砲手", "哨戒衛士", "本源衛士"] },
+  { name: "狙撃", subs: ["速射手", "榴弾射手", "散弾射手", "精密射手", "破城射手", "投擲手", "狩人", "旋輪射手"] },
+  { name: "術師", subs: ["中堅術師", "拡散術師", "連鎖術師", "法陣術師", "秘術師", "操機術師", "爆撃術師", "本源術師", "創霊術師"] },
+  { name: "医療", subs: ["医師", "群癒師", "療養師", "放浪医", "呪癒師", "連鎖癒師"] },
+  { name: "補助", subs: ["緩速師", "召喚師", "祈祷師", "吟遊者", "工匠", "祭儀師"] },
+  { name: "特殊", subs: ["鉤縄師", "推撃手", "執行者", "行商人", "潜伏者", "鬼才", "罠師", "傀儡師", "錬金士", "巡空者"] },
+];
+
+const CONDITIONS = [
+  "スキル1のみ使用",
+  "スキル2のみ使用",
+  "スキル3のみ使用",
+  "星5以下のみ編成",
+  "昇進1以下のみ編成",
+  "ウィシャデル禁止",
+  "新約エクシア禁止",
+  "2024年実装オペ禁止",
+  "2025年実装オペ禁止",
+  "2026年実装オペ禁止",
+  "編成人数5人以下",
+  "同職業2人以上禁止",
+  "商人利用禁止",
+  "希望のみ招集（招集券禁止）",
+  "全ての緊急作戦を選択",
+];
+
+let current = "phantom";
+let jobCount = 1;
+let conditionOn = false;
+let condCount = 1;
+
+function rand(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function randTwo(arr) {
+  const copy = [...arr];
+  const first = copy.splice(Math.floor(Math.random() * copy.length), 1)[0];
+  const second = copy[Math.floor(Math.random() * copy.length)];
+  return [first, second];
+}
+
+function setJobCount(n) {
+  jobCount = n;
+  document.getElementById("job1btn").classList.toggle("active", n === 1);
+  document.getElementById("job2btn").classList.toggle("active", n === 2);
+  document.getElementById("results").innerHTML = "";
+  document.getElementById("results").classList.remove("visible");
+}
+
+function setCondition(on) {
+  conditionOn = on;
+  document.getElementById("condOffBtn").classList.toggle("active", !on);
+  document.getElementById("condOnBtn").classList.toggle("active", on);
+  document.getElementById("condCountWrap").style.display = on ? "flex" : "none";
+  document.getElementById("results").innerHTML = "";
+  document.getElementById("results").classList.remove("visible");
+}
+
+function setCondCount(n) {
+  condCount = n;
+  document.getElementById("cond1btn").classList.toggle("active", n === 1);
+  document.getElementById("cond2btn").classList.toggle("active", n === 2);
+}
+
+function renderTabs() {
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = Object.entries(DATA).map(([key, val]) =>
+    `<button class="tab ${key === current ? 'active' : ''}" onclick="selectScenario('${key}')">${val.name}</button>`
+  ).join('');
+}
+
+function selectScenario(key) {
+  current = key;
+  renderTabs();
+  document.getElementById("results").innerHTML = "";
+  document.getElementById("results").classList.remove("visible");
+}
+
+function roll() {
+  const btn = document.getElementById("rollBtn");
+  btn.classList.add("rolling");
+  btn.disabled = true;
+
+  setTimeout(() => {
+    btn.classList.remove("rolling");
+    btn.disabled = false;
+
+    const scenario = DATA[current];
+    const ending = rand(scenario.endings);
+    const squad = rand(scenario.squads);
+
+    const results = document.getElementById("results");
+    results.classList.remove("visible");
+
+    let jobHtml = "";
+    if (jobCount === 1) {
+      const job = rand(JOBS);
+      const otherJobs = JOBS.filter(j => j.name !== job.name);
+      const subjobSource = rand(otherJobs);
+      const subjob = rand(subjobSource.subs);
+      jobHtml = `
+        <div class="result-card job">
+          <div class="card-label">Banned Class / 縛る職業</div>
+          <div class="card-value">${job.name}</div>
+        </div>
+        <div class="result-card subjob">
+          <div class="card-label">Banned Branch / 縛る職分</div>
+          <div class="card-value">${subjob}</div>
+        </div>
+      `;
+    } else {
+      const [job1, job2] = randTwo(JOBS);
+      jobHtml = `
+        <div class="result-card job">
+          <div class="card-label">Banned Class / 縛る職業（2つ）</div>
+          <div class="card-value">${job1.name}　・　${job2.name}</div>
+        </div>
+      `;
+    }
+
+    // 条件
+    let condHtml = "";
+    if (conditionOn) {
+      const pool = [...CONDITIONS];
+      const picked = [];
+      for (let i = 0; i < condCount && pool.length > 0; i++) {
+        const idx = Math.floor(Math.random() * pool.length);
+        picked.push(pool.splice(idx, 1)[0]);
+      }
+      condHtml = picked.map((c, i) => `
+        <div class="result-card condition">
+          <div class="card-label">Banned / 縛り条件 ${i + 1}</div>
+          <div class="card-value">${c}</div>
+        </div>
+      `).join('');
+    }
+
+    results.innerHTML = `
+      <div class="result-card ending">
+        <div class="card-label">Ending / エンディング</div>
+        <div class="card-value">${ending.name}</div>
+        <div class="card-sub">${ending.note}</div>
+      </div>
+      <div class="result-card squad">
+        <div class="card-label">Squad / 分隊</div>
+        <div class="card-value">${squad}</div>
+      </div>
+      ${jobHtml}
+      ${condHtml}
+    `;
+
+    requestAnimationFrame(() => {
+      results.classList.add("visible");
+    });
+  }, 400);
+}
+
+renderTabs();
+</script>
+</body>
+</html>
